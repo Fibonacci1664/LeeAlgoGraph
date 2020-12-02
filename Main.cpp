@@ -29,52 +29,91 @@ void display(std::list<Vertex*>& graph)
 	}
 }
 
-void flood(std::list<Vertex*>& graph)
+bool flood(std::list<Vertex*>& graph, std::string& start, std::string& target)
 {
 	// Start from starting point
 	// flood with cumulative distance from starting point until end
 	// Check for blocked
 
+	bool targetFound = false;
 	bool setStartDist = false;
+	bool updatedValue = false;
 	int currDist = 0;
+	int count = 0;
 
-	for (auto it = graph.begin(); it != graph.end(); ++it)
+	while (!targetFound || updatedValue)
 	{
-		Vertex* v = *it;
+		updatedValue = false;
 
-		if (!setStartDist)
+		for (auto it = graph.begin(); it != graph.end(); ++it)
 		{
-			v->m_distance = currDist;
-			setStartDist = true;
-		}
+			++count;
+			Vertex* v = *it;
 
-		// If our current vertex is blocked move to the next one.
-		if (v->m_blocked)
-		{
-			continue;
-		}
+			if (!setStartDist)
+			{
+				if (v->m_name == start)
+				{
+					v->m_distance = currDist;
+					setStartDist = true;
+				}
+				else
+				{
+					continue;
+				}
+			}
 
-		currDist = v->m_distance;
-
-		// Check neighbours of each vertex to see if its blocked
-		// If not assign it a distance value of curr distance + 1
-		for (auto jit = v->m_neighbours.begin(); jit != v->m_neighbours.end(); ++jit)
-		{
-			Vertex* neighbourV = *jit;
-
-			if (neighbourV->m_blocked)
+			// If our current vertex is blocked or its current distance is < 0, move to the next vertex.
+			// This is because if it has not been assigned a value then it is connected to a blocker vertex.
+			if (v->m_blocked || v->m_distance < 0)
 			{
 				continue;
 			}
-			else if (neighbourV->m_distance == -1)
+
+			currDist = v->m_distance;
+
+			// Check neighbours of each vertex to see if its blocked
+			// If not assign it a distance value of curr distance + 1
+			for (auto jit = v->m_neighbours.begin(); jit != v->m_neighbours.end(); ++jit)
 			{
-				neighbourV->m_distance = currDist + 1;
+				Vertex* neighbourV = *jit;
+
+				if (neighbourV->m_blocked)
+				{
+					continue;
+				}
+				else if (neighbourV->m_distance == -1)
+				{
+					neighbourV->m_distance = currDist + 1;
+					updatedValue = true;
+
+					if (neighbourV->m_name == target && neighbourV->m_distance > 0)
+					{
+						targetFound = true;
+						break;
+					}
+				}
+			}
+
+			// If we've found our target vertex, stop flooding.
+			if (targetFound)
+			{
+				std::cout << "\nThere was a path!\n";
+				updatedValue = false;
+				break;
 			}
 		}
+
+		if (!updatedValue)
+		{
+			break;
+		}
 	}
+
+	return targetFound;
 }
 
-std::list<Vertex*> trace(std::list<Vertex*>& graph)
+std::list<Vertex*> trace(std::list<Vertex*>& graph, std::string& start)
 {
 	std::list<Vertex*> trace;
 	bool startFound = false;
@@ -85,58 +124,66 @@ std::list<Vertex*> trace(std::list<Vertex*>& graph)
 	// Checking for a distance 1 less than curr distance
 	// Once we find that, save that vertex in a list of vertex.
 
-	for (auto it = graph.rbegin(); it != graph.rend(); ++it)
+	while (!startFound)
 	{
-		Vertex* v = *it;
-
-		// If the vertex we're on is blocked, or has a value of zero other, then move on.
-		// The zero check doesn't affect the start vertex for 2 reasons.
-		// 1. We're starting at the end and so looking for a number > 0.
-		// 2. When we do find the start which has a value of zero, this is checked before we get back to this point in the last iteration
-		// i.e. we set start found and then break out of all loops, so we never get back here to check for zero on the start vertex.
-		if (v->m_blocked || v->m_distance == 0)
+		for (auto it = graph.begin(); it != graph.end(); ++it)
 		{
-			continue;
-		}
+			Vertex* v = *it;
 
-		// For the first non-blocked vertex we find, save that as the start of our trace.
-		if (!setStartTrace)
-		{
-			trace.push_back(v);
-			currDist = v->m_distance;
-			setStartTrace = true;
-		}
-
-		// If our current vertex distance is greater than the distance we just saved on the last iteration, continue.
-		if (v->m_distance > currDist)
-		{
-			continue;
-		}
-
-		// Check neighbours of each vertex looking for a vertex with a distance of 1 less than our curr distance.
-		for (auto jit = v->m_neighbours.rbegin(); jit != v->m_neighbours.rend(); ++jit)
-		{
-			Vertex* neighbourV = *jit;
-
-			if (neighbourV->m_distance == (currDist - 1))
+			// If the vertex we're on is blocked, or has a value < zero, then move on.
+			// i.e. our current vertex was never assigned a distance value, more than likely because it was connected to a blocker.
+			if (v->m_blocked || v->m_distance < 0)
 			{
-				// Save vertex. and move here. i.e. dont check anymore neighbours, so break from this loop.
-				trace.push_back(neighbourV);
-				currDist = neighbourV->m_distance;
+				continue;
+			}
 
-				// Check if we have found the start.
-				if (neighbourV->m_distance == 0)
+			// For the first non-blocked, positive value vertex we find, save that as the start of our trace.
+			if (!setStartTrace)
+			{
+				// Keep looping through until we find the place where we want to start, namely the end position of our flood path.
+				if (v->m_name == start)
 				{
-					startFound = true;
+					trace.push_back(v);
+					currDist = v->m_distance;
+					setStartTrace = true;
 				}
+				else
+				{
+					continue;
+				}
+			}
 
+			// If our current vertex distance is greater than the distance we just saved on the last iteration, continue.
+			if (v->m_distance > currDist)
+			{
+				continue;
+			}
+
+			// Check neighbours of each vertex looking for a vertex with a distance of 1 less than our curr distance.
+			for (auto jit = v->m_neighbours.rbegin(); jit != v->m_neighbours.rend(); ++jit)
+			{
+				Vertex* neighbourV = *jit;
+
+				if (neighbourV->m_distance == (currDist - 1))
+				{
+					// Save vertex. and move here. i.e. dont check anymore neighbours, so break from this loop.
+					trace.push_back(neighbourV);
+					currDist = neighbourV->m_distance;
+
+					// Check if we have found the start.
+					if (neighbourV->m_distance == 0)
+					{
+						startFound = true;
+					}
+
+					break;
+				}
+			}
+
+			if (startFound)
+			{
 				break;
 			}
-		}
-
-		if (startFound)
-		{
-			break;
 		}
 	}
 
@@ -168,16 +215,27 @@ void test()
 	connectVerts(vf, vi);
 	connectVerts(vh, vi);
 
-	ve.m_blocked = true;
+	vd.m_blocked = true;
+	//vf.m_blocked = true;
 	std::list<Vertex*> graph{ &va, &vb, &vc, &vd, &ve, &vf, &vg, &vh, &vi };
 
 	display(graph);
-	flood(graph);
+	std::string start = "A";
+	std::string target = "I";
+	bool isPath = flood(graph, start, target);
 	std::cout << '\n';
 	display(graph);
 	std::cout << '\n';
-	std::list<Vertex*> backTrace = trace(graph);
-	display(backTrace);
+
+	if (isPath)
+	{
+		std::list<Vertex*> backTrace = trace(graph, target);
+		display(backTrace);
+	}
+	else
+	{
+		std::cout << "There was not a path!\n";
+	}	
 }
 
 int main()
